@@ -1,1 +1,1 @@
-# knn_on_stocks
+# KNN algorithm on stocks for the last 3 months
