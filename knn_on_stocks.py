@@ -12,16 +12,10 @@ from dateutil.relativedelta import relativedelta
 
 k = 7
 
-def dist(sample_1,sample_2,covar):
-    diff = (sample_1[:-1] - sample_2[:-1])
-    covar_I = np.linalg.inv(covar)
-    dst = diff.dot(covar_I).dot(diff.T)
-    return dst
-
 def euclid_distance(x1,x2):
     e_distance = 0.0
     for i in range(len(x1)-1):
-        e_distance +=(x1[i]-x2[i])**2
+        e_distance += (x1[i]-x2[i])**2
     return math.sqrt(e_distance)
 
 def get_neighbours(training,testing,k,n):
@@ -30,7 +24,7 @@ def get_neighbours(training,testing,k,n):
     tf_data = tf_data[:-1]
     covar = np.cov(tf_data)
     for x in range(n):
-        dst = dist(testing,training[x],covar)
+        dst = euclid_distance(testing,training[x])
         distances.append((training[x],dst))
     distances.sort(key=operator.itemgetter(1))
     neighbors = []
