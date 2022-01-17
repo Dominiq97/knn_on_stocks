@@ -32,11 +32,11 @@ def get_neighbours(training,testing,k,n):
 def get_results(neighbors):
     forecasts = {}
     for x in range(len(neighbors)):
-        response = neighbors[x][-1]
-        if response in forecasts:
-            forecasts[response] += 1
+        result = neighbors[x][-1]
+        if result in forecasts:
+            forecasts[result] += 1
         else:
-            forecasts[response] = 1
+            forecasts[result] = 1
     sorted_forecasts = sorted(forecasts.items(),key=operator.itemgetter(1),reverse=True)
     return sorted_forecasts[0][0]
 
@@ -46,8 +46,8 @@ def get_accuracy(testing,predictions):
         if testing[x][-1] == predictions[x]:
             knn_accuracy += 1
     tests = stats.chisquare([knn_accuracy,len(testing)-1-knn_accuracy])
-    p = tests[1]
-    return (knn_accuracy/float(len(testing)-1)) * 100.0, p
+    prediction = tests[1]
+    return (knn_accuracy/float(len(testing)-1)) * 100.0, prediction
 
 #compute the absolute data of values in x
 def mad(x): 
@@ -92,48 +92,47 @@ def K_algorithm(stock):
         predictions.append(result)
     knn_accuracy, p_value = get_accuracy(testing_data, predictions)
     print('KNN Accuracy: ' + repr(knn_accuracy) + '%')
-    print("P_value: " + repr(p_value))
+    print("Prediction value: " + repr(p_value))
 
     return p_value
 
+def get_list_companies_and_dates():
+    today = date.today()
+    three_months_ago = today - relativedelta(days=90)
 
-today = date.today()
-three_months = today - relativedelta(days=90)
-
-url="https://pkgstore.datahub.io/core/nasdaq-listings/nasdaq-listed_csv/data/7665719fb51081ba0bd834fde71ce822/nasdaq-listed_csv.csv"
-s = requests.get(url).content
-companies = pd.read_csv(io.StringIO(s.decode('utf-8')))
-Symbols = companies['Symbol'].tolist()
+    url="https://pkgstore.datahub.io/core/nasdaq-listings/nasdaq-listed_csv/data/7665719fb51081ba0bd834fde71ce822/nasdaq-listed_csv.csv"
+    s = requests.get(url).content
+    companies = pd.read_csv(io.StringIO(s.decode('utf-8')))
+    acronyms = companies['Symbol'].tolist()
+    return acronyms, three_months_ago, today
 
 
 def main(k,index=False):
     stock_final = pd.DataFrame()
     prediction_list = {}
-    for i in Symbols:
-        if i.startswith("AA"):
-            print( str(Symbols.index(i)) + str(' : ') + i, sep=',', end=',', flush=True)
-            try:
-                stock = []
-                stock = yf.download(i,start=three_months, end=today, threads=True, progress=False)
-                if len(stock) == 0:
-                    None
-                else:
-                    stock_final = stock_final.append(stock,sort=False)
-                    prediction_list[i] = K_algorithm(stock_final)
-                    stock_final = pd.DataFrame()
-            except Exception:
+    acronyms, three_months_ago, today = get_list_companies_and_dates()
+    for i in acronyms:
+        print( str(acronyms.index(i)) + str(' : ') + i, sep=',', end=',', flush=True)
+        try:
+            stock = []
+            stock = yf.download(i,start=three_months_ago, end=today, threads=True, progress=False)
+            if len(stock) == 0:
                 None
-        else:
-            break
+            else:
+                stock_final = stock_final.append(stock,sort=False)
+                prediction_list[i] = K_algorithm(stock_final)
+                stock_final = pd.DataFrame()
+        except Exception:
+            None
     predictions_sorted = sorted(prediction_list.items(), key=lambda x: x[1], )
     return predictions_sorted
 
 computations = main(k,index=True)
-print("Best companies to invest: ")
+print("Best companies to invest in: ")
 for x in list(reversed(list(computations)))[0:5]:
     print (x[0])
 
-print("The last companies you should invest: ")
-for x in list(computations)[0:7]:
+print("The companies you should NOT invest in: ")
+for x in list(computations)[0:10]:
     print (x[0])
 
