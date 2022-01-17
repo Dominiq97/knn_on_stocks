@@ -13,19 +13,16 @@ from dateutil.relativedelta import relativedelta
 k = 7
 
 def euclid_distance(x1,x2):
-    e_distance = 0.0
+    euclid_distance = 0.0
     for i in range(len(x1)-1):
-        e_distance += (x1[i]-x2[i])**2
-    return math.sqrt(e_distance)
+        euclid_distance += (x1[i]-x2[i])**2
+    return math.sqrt(euclid_distance)
 
 def get_neighbours(training,testing,k,n):
     distances = []
-    tf_data = training.T
-    tf_data = tf_data[:-1]
-    covar = np.cov(tf_data)
     for x in range(n):
-        dst = euclid_distance(testing,training[x])
-        distances.append((training[x],dst))
+        distance = euclid_distance(testing,training[x])
+        distances.append((training[x],distance))
     distances.sort(key=operator.itemgetter(1))
     neighbors = []
     for x in range(k):
@@ -33,37 +30,36 @@ def get_neighbours(training,testing,k,n):
     return neighbors
 
 def get_results(neighbors):
-    classvotes = {}
+    forecasts = {}
     for x in range(len(neighbors)):
         response = neighbors[x][-1]
-        if response in classvotes:
-            classvotes[response] += 1
+        if response in forecasts:
+            forecasts[response] += 1
         else:
-            classvotes[response] = 1
-    sortedvotes = sorted(classvotes.items(),key=operator.itemgetter(1),reverse=True)
-    return sortedvotes[0][0]
+            forecasts[response] = 1
+    sorted_forecasts = sorted(forecasts.items(),key=operator.itemgetter(1),reverse=True)
+    return sorted_forecasts[0][0]
 
 def get_accuracy(testing,predictions):
-    knn_correct = 0
-    guess_correct = 0
+    knn_accuracy = 0
     for x in range(len(testing)-1):
         if testing[x][-1] == predictions[x]:
-            knn_correct += 1
-        if random.randint(0,1) == testing[x][-1]:
-            guess_correct += 1
-    tst = stats.chisquare([knn_correct,len(testing)-1-knn_correct],f_exp=[guess_correct,len(testing)-1-guess_correct])
-    p = tst[1]
-    return (knn_correct/float(len(testing)-1)) * 100.0, (guess_correct/float(len(testing)-1)) * 100.0, p
+            knn_accuracy += 1
+    tests = stats.chisquare([knn_accuracy,len(testing)-1-knn_accuracy])
+    p = tests[1]
+    return (knn_accuracy/float(len(testing)-1)) * 100.0, p
+
+#compute the absolute data of values in x
+def mad(x): 
+    return np.fabs(x - x.mean()).mean()
 
 def K_algorithm(stock):
-    sp = stock
-   # print(sp)
-    data = sp.assign(foresee = 0)
-    sp.index = np.arange(1, len(sp) + 1)
-    for i in range(len(sp)-1):
+    data = stock.assign(foresee = 0)
+    stock.index = np.arange(1, len(stock) + 1)
+    for i in range(len(stock)-1):
         j = i + 1
-        dclose = sp._get_value(j,'Close')
-        dopen = sp._get_value(j,'Open')
+        dclose = stock._get_value(j,'Close')
+        dopen = stock._get_value(j,'Open')
         if dclose - dopen > 0:
             data._set_value(i,'foresee',1)
         else:
@@ -76,19 +72,17 @@ def K_algorithm(stock):
     data["20d"] = data["Close"].rolling(window=20).mean()
     data["k4"] = (data["5d"] - data["20d"])
     data["k5"] = (data["5d"] - data["13d"])
-    def mad(x): return np.fabs(x - x.mean()).mean()
     data["k6"] = data["Close"].rolling(window=5).apply(mad)
 
     data = data.loc[20:,["k1","k2","k3","k4","k5","k6","foresee"]]
     redata = data[:-1]
     training_data = redata.sample(frac=0.7)
-    tst = list(data.index)
+    test = list(data.index)
     for i in list(training_data.index):
-        tst.remove(i)
-    testing_data = data[data.index.isin(tst)]
+        test.remove(i)
+    testing_data = data[data.index.isin(test)]
     training_data = training_data.values
     testing_data = testing_data.values
-
 
     predictions=[]
     for x in range(len(testing_data)):
@@ -96,19 +90,11 @@ def K_algorithm(stock):
         neighbors = get_neighbours(training_data,testing_data[x],k,t)
         result = get_results(neighbors)
         predictions.append(result)
-        print('> predicted=' + repr(result) + ', actual=' + repr(testing_data[x][-1]))
-    knn_accuracy, guess_accuracy, p_value = get_accuracy(testing_data, predictions)
-    print('k = ' + str(k))
-
-    print('Accuracy: ' + repr(knn_accuracy) + '%')
-    print('Matched_Accuracy: ' + repr(guess_accuracy) + '%')
+    knn_accuracy, p_value = get_accuracy(testing_data, predictions)
+    print('KNN Accuracy: ' + repr(knn_accuracy) + '%')
     print("P_value: " + repr(p_value))
-    if predictions[-1] == 1:
-        print('buy in')
-        return "buy in"
-    else:
-        print('sell out')
-        return "buy out" 
+
+    return p_value
 
 
 today = date.today()
@@ -122,8 +108,9 @@ Symbols = companies['Symbol'].tolist()
 
 def main(k,index=False):
     stock_final = pd.DataFrame()
+    prediction_list = {}
     for i in Symbols:
-        if i=="AAIT" or i == "AAL":
+        if i.startswith("AA"):
             print( str(Symbols.index(i)) + str(' : ') + i, sep=',', end=',', flush=True)
             try:
                 stock = []
@@ -131,13 +118,22 @@ def main(k,index=False):
                 if len(stock) == 0:
                     None
                 else:
-
                     stock_final = stock_final.append(stock,sort=False)
-                    K_algorithm(stock_final)
+                    prediction_list[i] = K_algorithm(stock_final)
                     stock_final = pd.DataFrame()
             except Exception:
                 None
         else:
             break
+    predictions_sorted = sorted(prediction_list.items(), key=lambda x: x[1], )
+    return predictions_sorted
 
-main(k,index=True)
+computations = main(k,index=True)
+print("Best companies to invest: ")
+for x in list(reversed(list(computations)))[0:5]:
+    print (x[0])
+
+print("The last companies you should invest: ")
+for x in list(computations)[0:7]:
+    print (x[0])
+
